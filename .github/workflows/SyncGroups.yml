@@ -1,23 +1,19 @@
 name: Sync Groups
-
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
   schedule:
     - cron: '0 */6 * * *'
-
 permissions:
   id-token: write   # required for OIDC
   contents: read    # required for actions/checkout
-
 jobs:
   SyncGroups:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
-
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -25,42 +21,36 @@ jobs:
       - name: Azure login via OIDC (no secrets)
         uses: azure/login@v3
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}     # or repo vars
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          allow-no-subscriptions: true                  # we only need tokens, no ARM
+          allow-no-subscriptions: true
           enable-AzPSSession: true
 
       - name: Install Graph PowerShell modules
         shell: pwsh
         run: |
-          $GraphrequiredVersion = '2.39.0'
-          $Graphmodules = 'Microsoft.Graph.Authentication', 'Microsoft.Graph.Groups', 'Microsoft.Graph.DeviceManagement'
-
-          $Graphmissing = $Graphmodules | Where-Object {
-              -not (Get-Module -ListAvailable -Name $_ | Where-Object { $_.Version -eq $GraphrequiredVersion })
+          $ErrorActionPreference = 'Stop'
+          $GraphRequiredVersion = '2.39.0'
+          $GraphModules = 'Microsoft.Graph.Authentication', 'Microsoft.Graph.Groups', 'Microsoft.Graph.DeviceManagement'
+          $GraphMissing = $GraphModules | Where-Object {
+              -not (Get-Module -ListAvailable -Name $_ | Where-Object { $_.Version -eq $GraphRequiredVersion })
           }
-
-          if ($Graphmissing) {
-              Write-Host "Installing required Graph modules..."
+          if ($GraphMissing) {
+              Write-Host "Installing missing Graph modules: $($GraphMissing -join ', ')"
               Set-PSRepository PSGallery -InstallationPolicy Trusted
-              Install-Module $missing -RequiredVersion $requiredVersion -Force
+              Install-Module $GraphMissing -RequiredVersion $GraphRequiredVersion -Force -Scope CurrentUser
           } else {
-              Write-Host "All modules already installed at v$requiredVersion. Importing..."
+              Write-Host "All modules already installed at v$GraphRequiredVersion."
           }
-
-          Import-Module $Graphmodules -RequiredVersion $GraphrequiredVersion
+          Import-Module $GraphModules -RequiredVersion $GraphRequiredVersion
 
       - name: Connect to Graph with OIDC token and run user-group-sync.ps1
         shell: pwsh
         run: |
-          $ErrorActionPreference = "Stop"
-          Import-Module Microsoft.Graph.Authentication, Microsoft.Graph.Groups, Microsoft.Graph.DeviceManagement
-
-          $AccessToken = (Get-AzAccessToken -resourcetypename MSGraph -AsSecureString).Token
-
-          Connect-MgGraph -AccessToken $AccessToken -NoWelcome 
+          $ErrorActionPreference = 'Stop'
+          $GraphRequiredVersion = '2.39.0'
+          Import-Module Microsoft.Graph.Authentication, Microsoft.Graph.Groups, Microsoft.Graph.DeviceManagement -RequiredVersion $GraphRequiredVersion
+          $AccessToken = (Get-AzAccessToken -ResourceTypeName MSGraph -AsSecureString).Token
+          Connect-MgGraph -AccessToken $AccessToken -NoWelcome
           & "$env:GITHUB_WORKSPACE/scripts/user-group-syncv3.ps1"
-
           Disconnect-MgGraph | Out-Null
-
-     
