@@ -1,0 +1,66 @@
+name: Sync Groups
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 */6 * * *'
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read    # required for actions/checkout
+
+jobs:
+  SyncGroups:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Azure login via OIDC (no secrets)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}     # or repo vars
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true                  # we only need tokens, no ARM
+          enable-AzPSSession: true
+
+      - name: Install Graph PowerShell modules
+        shell: pwsh
+        run: |
+          $GraphrequiredVersion = '2.39.0'
+          $Graphmodules = 'Microsoft.Graph.Authentication', 'Microsoft.Graph.Groups', 'Microsoft.Graph.DeviceManagement'
+
+          $Graphmissing = $Graphmodules | Where-Object {
+              -not (Get-Module -ListAvailable -Name $_ | Where-Object { $_.Version -eq $GraphrequiredVersion })
+          }
+
+          if ($Graphmissing) {
+              Write-Host "Installing required Graph modules..."
+              Set-PSRepository PSGallery -InstallationPolicy Trusted
+              Install-Module $missing -RequiredVersion $requiredVersion -Force
+          } else {
+              Write-Host "All modules already installed at v$requiredVersion. Importing..."
+          }
+
+          Import-Module $Graphmodules -RequiredVersion $GraphrequiredVersion
+
+      - name: Connect to Graph with OIDC token and run user-group-sync.ps1
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Import-Module Microsoft.Graph.Authentication, Microsoft.Graph.Groups, Microsoft.Graph.DeviceManagement
+
+          $AccessToken = (Get-AzAccessToken -resourcetypename MSGraph -AsSecureString).Token
+
+          Connect-MgGraph -AccessToken $AccessToken -NoWelcome 
+          & "$env:GITHUB_WORKSPACE/scripts/user-group-syncv3.ps1"
+
+          Disconnect-MgGraph | Out-Null
+
+     
