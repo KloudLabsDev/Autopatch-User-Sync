@@ -168,11 +168,6 @@ foreach ($device in $allDevices) {
 }
 Write-Host "  $($deviceOwner.Count) devices have a primary user"
 
-# TEMP DEBUG
-# Write-Host "`n  ---- `$deviceOwner (sample) ----" -ForegroundColor Cyan
-# $deviceOwner.GetEnumerator() | Select-Object -First 5 @{N='DeviceId';E={$_.Key}}, @{N='UserPrincipalName';E={$_.Value.UserPrincipalName}}, @{N='DeviceName';E={$_.Value.DeviceName}} | Format-Table -AutoSize
-
-
 # --- Determine which ring each user belongs in ---
 # Go through device groups in order (Test first). The first ring a user is
 # in is the one they keep - a second device in a later ring is a conflict,
