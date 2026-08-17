@@ -190,9 +190,7 @@ foreach ($appRole in $appRoles) {
 }
 
 
-# ============================================================
-# STEP 6: SUMMARY
-# ============================================================
+# Summary output
 Write-Host "`n================ SUMMARY ================" -ForegroundColor Green
 Write-Host "App registration: $AppName"
 Write-Host "  Application (client) ID: $($app.AppId)"
